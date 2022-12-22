@@ -2,17 +2,62 @@
 from __future__ import division, print_function, absolute_import
 
 import argparse
+import gzip
 import os
-
+import random
 import cv2
 import numpy as np
-
+from pathlib import Path
 from application_util import preprocessing
 from application_util import visualization
 from deep_sort import nn_matching
 from deep_sort.detection import Detection
 from deep_sort.tracker import Tracker
 from opts import opt
+from time import time
+
+def convert_YOLO_2_MOT(yolo_data):
+    '''converts yolo data which is an array of lists of detections of the form '''
+    '''[[x_max, x_min, y_max, y_min, conf, cls], ...]'''
+    '''into a numpy array of the with an entry for each detection and the MOT data format'''
+    ''' <frame>, <id>, <bb_left>, <bb_top>, <bb_width>, <bb_height>, <conf>, <x>, <y>, <z> '''
+    assert isinstance(yolo_data, np.ndarray) or isinstance(yolo_data, list)
+
+    MOT_Data = []
+
+    total_frames = len(yolo_data)
+    for f_num in range(total_frames):
+        num_det = len(yolo_data[f_num])
+        for d in range(num_det):
+            det = yolo_data[f_num][d]
+            if det:
+                ##yolo data
+                x_max = det[0]
+                x_min = det[1]
+                y_max = det[2]
+                y_min = det[3]
+                conf = det[4]
+                cls = det[5]
+                ##MOT data
+                id = -1
+                bb_left = x_min
+                bb_top = y_min
+                bb_width = abs(x_max-x_min)
+                bb_height = abs(y_max-y_min)
+                x,y,z = -1, -1 , -1
+                if bb_width!=0 and bb_height!=0:
+                    MOT_Data.append([f_num, id, bb_left, bb_top, bb_width, bb_height, conf, x, y, z])
+
+
+
+    MOT_Data = np.asarray(MOT_Data)
+
+    return MOT_Data
+
+
+
+
+
 
 
 def gather_sequence_info(sequence_dir, detection_file):
@@ -126,6 +171,78 @@ def create_detections(detection_mat, frame_idx, min_height=0):
         detection_list.append(Detection(bbox, confidence, feature))
     return detection_list
 
+def custom_run(detection_file, output_file, min_confidence,
+        nms_max_overlap, min_detection_height, max_cosine_distance,
+        nn_budget):
+    st = time()
+    #load yolov7 format detections
+    detection_file = Path(detection_file)
+    if not detection_file.is_file():
+        ValueError(f"detection file: {str(detection_file)}!")
+    if detection_file.suffix == ".gz":
+        file = gzip.GzipFile(detection_file.as_posix(),"r")
+        detections = np.load(file, allow_pickle=True)
+    else:
+        detections = np.load(detection_file.as_posix(), allow_pickle=True)
+
+
+    #load used seq info
+    num_frames = len(detections)
+    detections = convert_YOLO_2_MOT(detections)
+    print("MOT detections shape", detections.shape)
+
+    seq_info = dict(detections=detections, min_frame_idx=1, max_frame_idx=num_frames)
+    et = time()
+
+    print(f"runtime up to data conversion is {et-st} seconds!")
+
+
+    metric = nn_matching.NearestNeighborDistanceMetric(
+        'cosine',
+        max_cosine_distance,
+        nn_budget
+    )
+    tracker = Tracker(metric)
+    results = []
+
+    def frame_callback(frame_idx):
+        print("Processing frame %05d" % frame_idx)
+
+        # Load image and generate detections.
+        detections = create_detections(
+            seq_info["detections"], frame_idx, min_detection_height)
+
+        detections = [d for d in detections if d.confidence >= min_confidence]
+
+        # Run non-maxima suppression.
+        boxes = np.array([d.tlwh for d in detections])
+        scores = np.array([d.confidence for d in detections])
+        indices = preprocessing.non_max_suppression(
+            boxes, nms_max_overlap, scores)
+        detections = [detections[i] for i in indices]
+
+
+        # Update tracker.
+        tracker.predict()
+        tracker.update(detections)
+
+        # Store results.
+        for track in tracker.tracks:
+            if not track.is_confirmed() or track.time_since_update > 1:
+                continue
+            bbox = track.to_tlwh()
+            results.append([
+                    frame_idx, track.track_id, bbox[0], bbox[1], bbox[2], bbox[3]])
+
+    # Run tracker.
+    visualizer = visualization.NoVisualization(seq_info)
+    visualizer.run(frame_callback)
+
+    # Store results.
+    f = open(output_file, 'w')
+    for row in results:
+        print('%d,%d,%.2f,%.2f,%.2f,%.2f,1,-1,-1,-1' % (
+            row[0], row[1], row[2], row[3], row[4], row[5]),file=f)
 
 def run(sequence_dir, detection_file, output_file, min_confidence,
         nms_max_overlap, min_detection_height, max_cosine_distance,
@@ -171,7 +288,6 @@ def run(sequence_dir, detection_file, output_file, min_confidence,
         # print("Processing frame %05d" % frame_idx)
 
         # Load image and generate detections.
-        print("seq info", seq_info["detections"])
         detections = create_detections(
             seq_info["detections"], frame_idx, min_detection_height)
 
@@ -263,10 +379,88 @@ def parse_args():
         default=True, type=bool_string)
     return parser.parse_args()
 
+def plot_one_box(x, img, color=None, label=None, line_thickness=3):
+    # Plots one bounding box on image img
+    tl = line_thickness or round(0.002 * (img.shape[0] + img.shape[1]) / 2) + 1  # line/font thickness
+    color = color or [random.randint(0, 255) for _ in range(3)]
+    c1, c2 = (int(x[0]), int(x[1])), (int(x[2]), int(x[3]))
+    cv2.rectangle(img, c1, c2, color, thickness=tl, lineType=cv2.LINE_AA)
+    if label:
+        tf = max(tl - 1, 1)  # font thickness
+        t_size = cv2.getTextSize(label, 0, fontScale=tl / 3, thickness=tf)[0]
+        c2 = c1[0] + t_size[0], c1[1] - t_size[1] - 3
+        cv2.rectangle(img, c1, c2, color, -1, cv2.LINE_AA)  # filled
+        cv2.putText(img, label, (c1[0], c1[1] - 2), 0, tl / 3, [225, 255, 255], thickness=tf, lineType=cv2.LINE_AA)
+
+def create_output_video(source_video_path, sort_data_path):
+    if not Path(sort_data_path).is_file():
+        ValueError(f" sort data {sort_data_path} does not exist!")
+
+    if not Path(source_video_path).is_file():
+        ValueError(f" source video path {source_video_path} does not exist!")
+
+    sort_data = np.loadtxt(sort_data_path, delimiter=',')
+    max_frame = int(np.amax(sort_data[:,0]))
+    det_list = []
+
+    for f_num in range(1,max_frame+1):
+        f_det = sort_data[np.where(sort_data[:,0] == f_num)]
+        det_list.append(f_det)
+
+
+    ####create movie
+    vid = cv2.VideoCapture(source_video_path)
+    ret, frame = vid.read()
+    count = 0
+    colors = [[255,0,0],[0,0,255],[0,255,0]]
+    while ret and count <= max_frame:
+        dets = det_list[count]
+        if len(dets) > 0:
+            for d_i, det in enumerate(dets):
+                bb_left, bb_top, bb_width, bb_height = det[2:6]
+                box = [int(bb_width+bb_left), int(bb_left),int(bb_height+bb_top), int(bb_top)]
+                plot_one_box(x=box,img=frame, color=colors[d_i % 3],label=f"id {det[1]}")
+
+        cv2.imshow('', frame)
+        cv2.waitKey(50)
+
+
+        ret, frame = vid.read()
+        count+=1
+
+    vid.release()
+
+
+
+
+
+
+
+
+
+
+
+
 
 if __name__ == "__main__":
-    args = parse_args()
-    run(
-        args.sequence_dir, args.detection_file, args.output_file,
-        args.min_confidence, args.nms_max_overlap, args.min_detection_height,
-        args.max_cosine_distance, args.nn_budget, args.display)
+    # args = parse_args()
+
+    # run(
+    #     args.sequence_dir, args.detection_file, args.output_file,
+    #     args.min_confidence, args.nms_max_overlap, args.min_detection_height,
+    #     args.max_cosine_distance, args.nn_budget, args.display)
+
+    # detection_file = "/media/mitchell/ssd2/Mocap_Data/MoCap Data/Alec/Capture 1/Alec Jogging/yolov7_predictions.npy.gz"
+    # output_file = "/media/mitchell/ssd2/Mocap_Data/MoCap Data/Alec/Capture 1/Alec Jogging/StrongSORT_Output.txt"
+    # min_confidence = 0.5
+    # nms_max_overlap = 2.0
+    # min_detection_height = 0
+    # max_cosine_distance = 0.2
+    # nn_budget = None
+    #
+    # custom_run(detection_file,output_file,min_confidence,nms_max_overlap,min_detection_height, max_cosine_distance, nn_budget)
+
+
+    source_video_path = "/media/mitchell/ssd2/Mocap_Data/MoCap Data/Alec/Capture 1/Alec Jogging/undistorted_Alec Jogging_DV1.mov"
+    sort_data_path = "/media/mitchell/ssd2/Mocap_Data/MoCap Data/Alec/Capture 1/Alec Jogging/DeepSortLinkGSI_Output.txt"
+    create_output_video(source_video_path,sort_data_path)

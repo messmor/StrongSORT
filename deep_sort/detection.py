@@ -45,5 +45,7 @@ class Detection(object):
         """
         ret = self.tlwh.copy()
         ret[:2] += ret[2:] / 2
+        if ret[3] == 0:
+            print("ret at time of zero division:", ret)
         ret[2] /= ret[3]
         return ret

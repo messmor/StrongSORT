@@ -4,6 +4,7 @@ import colorsys
 from .image_viewer import ImageViewer
 
 
+
 def create_unique_color_float(tag, hue_step=0.41):
     """Create a unique RGB color code for a given track id (tag).
 
@@ -77,7 +78,7 @@ class NoVisualization(object):
 
     def run(self, frame_callback):
         while self.frame_idx <= self.last_idx:
-            frame_callback(self, self.frame_idx)
+            frame_callback(self.frame_idx)
             self.frame_idx += 1
 
 

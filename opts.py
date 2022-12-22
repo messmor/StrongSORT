@@ -44,14 +44,16 @@ class opts:
     def __init__(self):
         self.parser = argparse.ArgumentParser()
         self.parser.add_argument(
-            'dataset',
+            '--dataset',
             type=str,
             help='MOT17 or MOT20',
+            default='MOT20'
         )
         self.parser.add_argument(
-            'mode',
+            '--mode',
             type=str,
             help='val or test',
+            default='test'
         )
         self.parser.add_argument(
             '--BoT',
@@ -95,15 +97,15 @@ class opts:
         )
         self.parser.add_argument(
             '--root_dataset',
-            default='/data/dyh/data/MOTChallenge'
+            default='/home/mitchell/research/StrongSORT/data/MOTChallenge'
         )
         self.parser.add_argument(
             '--path_AFLink',
-            default='/data/dyh/results/StrongSORT_Git/AFLink_epoch20.pth'
+            default='/home/mitchell/research/StrongSORT/data/StrongSORT_MOT_Data/StrongSORT/AFLink_epoch20.pth'
         )
         self.parser.add_argument(
             '--dir_save',
-            default='/data/dyh/results/StrongSORT_Git/tmp'
+            default='/home/mitchell/research/StrongSORT/data/results/tmp'
         )
         self.parser.add_argument(
             '--EMA_alpha',
@@ -124,10 +126,10 @@ class opts:
         opt.min_detection_height = 0
         if opt.BoT:
             opt.max_cosine_distance = 0.4
-            opt.dir_dets = '/data/dyh/results/StrongSORT_Git/{}_{}_YOLOX+BoT'.format(opt.dataset, opt.mode)
+            opt.dir_dets = '/home/mitchell/research/StrongSORT/data/StrongSORT_MOT_Data/StrongSORT/{}_{}_YOLOX+BoT'.format(opt.dataset, opt.mode)
         else:
             opt.max_cosine_distance = 0.3
-            opt.dir_dets = '/data/dyh/results/StrongSORT_Git/{}_{}_YOLOX+simpleCNN'.format(opt.dataset, opt.mode)
+            opt.dir_dets = '/home/mitchell/research/StrongSORT/data/StrongSORT_MOT_Data/StrongSORT/{}_{}_YOLOX+simpleCNN'.format(opt.dataset, opt.mode)
         if opt.MC:
             opt.max_cosine_distance += 0.05
         if opt.EMA:
@@ -135,7 +137,7 @@ class opts:
         else:
             opt.nn_budget = 100
         if opt.ECC:
-            path_ECC = '/data/dyh/results/StrongSORT_Git/{}_ECC_{}.json'.format(opt.dataset, opt.mode)
+            path_ECC = 'data/StrongSORT_MOT_Data/StrongSORT/{}_ECC_{}.json'.format(opt.dataset, opt.mode)
             opt.ecc = json.load(open(path_ECC))
         opt.sequences = data[opt.dataset][opt.mode]
         opt.dir_dataset = join(
@@ -145,4 +147,5 @@ class opts:
         )
         return opt
 
-opt = opts().parse()
+opt = opts().parser.parse_args()
+
