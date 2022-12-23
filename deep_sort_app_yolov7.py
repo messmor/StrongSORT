@@ -54,12 +54,6 @@ def convert_YOLO_2_MOT(yolo_data):
 
     return MOT_Data
 
-
-
-
-
-
-
 def gather_sequence_info(sequence_dir, detection_file):
     """Gather sequence information, such as image filenames, detections,
     groundtruth (if available).
@@ -137,7 +131,6 @@ def gather_sequence_info(sequence_dir, detection_file):
         "update_ms": update_ms
     }
     return seq_info
-
 
 def create_detections(detection_mat, frame_idx, min_height=0):
     """Create detections for given frame index from the raw detection matrix.
@@ -417,12 +410,14 @@ def create_output_video(source_video_path, sort_data_path):
         dets = det_list[count]
         if len(dets) > 0:
             for d_i, det in enumerate(dets):
-                bb_left, bb_top, bb_width, bb_height = det[2:6]
-                box = [int(bb_width+bb_left), int(bb_left),int(bb_height+bb_top), int(bb_top)]
+                y_min, y_max, x_min, x_max = det[2:6]
+                # bb_left, bb_top, bb_width, bb_height = det[2:6]
+                # box = [int(bb_width+bb_left), int(bb_left),int(bb_height+bb_top), int(bb_top)]
+                box = [int(y_max),int(y_min),int(x_max),int(x_min)]
                 plot_one_box(x=box,img=frame, color=colors[d_i % 3],label=f"id {det[1]}")
 
         cv2.imshow('', frame)
-        cv2.waitKey(50)
+        cv2.waitKey()
 
 
         ret, frame = vid.read()
@@ -461,6 +456,6 @@ if __name__ == "__main__":
     # custom_run(detection_file,output_file,min_confidence,nms_max_overlap,min_detection_height, max_cosine_distance, nn_budget)
 
 
-    source_video_path = "/media/mitchell/ssd2/Mocap_Data/MoCap Data/Alec/Capture 1/Alec Jogging/undistorted_Alec Jogging_DV1.mov"
-    sort_data_path = "/media/mitchell/ssd2/Mocap_Data/MoCap Data/Alec/Capture 1/Alec Jogging/DeepSortLinkGSI_Output.txt"
+    source_video_path = "/home/mitchell/data/Hand_Testing/Office_Videos/IMG_5263.MOV"
+    sort_data_path = "/home/mitchell/data/Hand_Testing/Office_Videos/DeepSortLinkGSI_Output.txt"
     create_output_video(source_video_path,sort_data_path)

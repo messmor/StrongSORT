@@ -20,10 +20,10 @@ if __name__ == '__main__':
     model.load_state_dict(torch.load(opt.path_AFLink))
     dataset = LinkData('', '')
     ###Deepsort
-    detection_file = "/media/mitchell/ssd2/Mocap_Data/MoCap Data/Alec/Capture 1/Alec Jogging/yolov7_predictions.npy.gz"
-    output_file = "/media/mitchell/ssd2/Mocap_Data/MoCap Data/Alec/Capture 1/Alec Jogging/DeepSORT_Output.txt"
-    output_file_link = "/media/mitchell/ssd2/Mocap_Data/MoCap Data/Alec/Capture 1/Alec Jogging/DeepSortLink_Output.txt"
-    output_file_link_GSI ="/media/mitchell/ssd2/Mocap_Data/MoCap Data/Alec/Capture 1/Alec Jogging/DeepSortLinkGSI_Output.txt"
+    detection_file = "/home/mitchell/data/Hand_Testing/Office_Videos/yolov7_predictions.npy.gz"
+    output_file = "/home/mitchell/data/Hand_Testing/Office_Videos/DeepSORT_Output.txt"
+    output_file_link = "/home/mitchell/data/Hand_Testing/Office_Videos/DeepSortLink_Output.txt"
+    output_file_link_GSI ="/home/mitchell/data/Hand_Testing/Office_Videos/DeepSortLinkGSI_Output.txt"
     min_confidence = 0.2
     nms_max_overlap = 1.0
     min_detection_height = 0
